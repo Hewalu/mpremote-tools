@@ -25,6 +25,13 @@ export class MpremoteContentProvider implements vscode.TextDocumentContentProvid
             // Normalize line endings
             return stdout.replace(/\r/g, ''); // Return the file content
         } catch (error: any) {
+            if (error.stderr.trim() === "mpremote: no device found") {
+                const errorMessage = "Wahrscheinlich läuft ein anderer Prozess auf dem Gerät.";
+                console.error(errorMessage);
+                vscode.window.showErrorMessage(errorMessage);
+                return `// Failed to fetch content: ${error.message || error}`;
+            }
+
             console.error(`Failed to execute mpremote fs cat for ${filePath}: ${error}`);
             let errorMessage = `Fehler beim Ausführen von mpremote fs cat für ${filePath}.`;
             if (error.stderr) {

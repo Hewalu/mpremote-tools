@@ -34,27 +34,27 @@ export class MpremoteCommandsProvider implements vscode.TreeDataProvider<Mpremot
             }, new vscode.ThemeIcon('debug-disconnect')),
 
             new MpremoteCommandItem('Soft Reset', vscode.TreeItemCollapsibleState.None, {
-                command: 'mpremote.disconnect',
+                command: 'mpremote.softReset',
                 title: 'Soft Reset'
             }, new vscode.ThemeIcon('debug-rerun')),
 
             new MpremoteCommandItem('Hard Reset', vscode.TreeItemCollapsibleState.None, {
-                command: 'mpremote.disconnect',
+                command: 'mpremote.hardReset',
                 title: 'Hard Reset'
             }, new vscode.ThemeIcon('debug-restart')),
 
             new MpremoteCommandItem('Open Terminal', vscode.TreeItemCollapsibleState.None, {
-                command: 'mpremote.disconnect',
+                command: 'mpremote.openTerminal',
                 title: 'Open Terminal'
             }, new vscode.ThemeIcon('terminal')),
 
             new MpremoteCommandItem('Install Package', vscode.TreeItemCollapsibleState.None, {
-                command: 'mpremote.disconnect',
+                command: 'mpremote.installPackage',
                 title: 'Install Package'
             }, new vscode.ThemeIcon('symbol-constructor')),
 
             new MpremoteCommandItem('RTC', vscode.TreeItemCollapsibleState.None, {
-                command: 'mpremote.disconnect',
+                command: 'mpremote.rtc',
                 title: 'RTC'
             }, new vscode.ThemeIcon('watch')),
         ]);

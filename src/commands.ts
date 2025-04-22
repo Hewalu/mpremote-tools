@@ -7,6 +7,8 @@ const skipFolderDeleteConfirmationKey = 'mpremote.skipFolderDeleteConfirmation';
 
 export function registerCommands(context: vscode.ExtensionContext, fileSystemProvider: MpremoteFileSystemProvider) {
 
+    let lastOpenTerminal: string | undefined = undefined;
+
     context.subscriptions.push(
         vscode.commands.registerCommand('mpremote.connect', () => {
             vscode.window.showInformationMessage('Verbindungsversuch gestartet... (Logik fehlt)');
@@ -18,19 +20,103 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
             // fileSystemProvider.refresh();
         }),
 
-        // --- File Execution Command ---
+        vscode.commands.registerCommand('mpremote.softReset', async () => {
+            try {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Führe Soft-Reset aus...",
+                    cancellable: false
+                }, async () => {
+                    const { stderr } = await exec('mpremote soft-reset');
+                    if (stderr) {
+                        console.log(stderr);
+                        console.error(`mpremote soft-reset error: ${stderr}`);
+                        vscode.window.showErrorMessage(`Fehler beim Soft-Reset: ${stderr.split('\n')[0]}`);
+                    }
+                });
+            } catch (error: any) {
+                if (error.stderr.trim() === "mpremote: no device found") {
+                    const errorMessage = "Wahrscheinlich läuft ein anderer Prozess auf dem Gerät.";
+                    console.error(errorMessage);
+                    vscode.window.showErrorMessage(errorMessage);
+                    return;
+                }
+
+                let errorMessage = `Fehler beim Ausführen von mpremote soft-reset.`;
+                if (error.stderr) {
+                    errorMessage += ` Details: ${error.stderr}`;
+                } else if (error.message) {
+                    errorMessage += ` Details: ${error.message}`;
+                }
+                console.error(`Failed to execute mpremote soft-reset: ${errorMessage}`);
+                vscode.window.showErrorMessage(errorMessage);
+            }
+        }),
+
+        vscode.commands.registerCommand('mpremote.hardReset', async () => {
+            try {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Führe Hard-Reset aus...",
+                    cancellable: false
+                }, async () => {
+                    const { stderr } = await exec('mpremote reset');
+                    if (stderr) {
+                        console.log(stderr);
+                        console.error(`mpremote hard-reset error: ${stderr}`);
+                        vscode.window.showErrorMessage(`Fehler beim Hard-Reset: ${stderr.split('\n')[0]}`);
+                    }
+                });
+            } catch (error: any) {
+                if (error.stderr.trim() === "mpremote: no device found") {
+                    const errorMessage = "Wahrscheinlich läuft ein anderer Prozess auf dem Gerät.";
+                    console.error(errorMessage);
+                    vscode.window.showErrorMessage(errorMessage);
+                    return;
+                }
+
+                let errorMessage = `Fehler beim Ausführen von mpremote hard-reset.`;
+                if (error.stderr) {
+                    errorMessage += ` Details: ${error.stderr}`;
+                } else if (error.message) {
+                    errorMessage += ` Details: ${error.message}`;
+                }
+                console.error(`Failed to execute mpremote hard-reset: ${errorMessage}`);
+                vscode.window.showErrorMessage(errorMessage);
+            }
+        }),
+
+        vscode.commands.registerCommand('mpremote.openTerminal', () => {
+            const terminalName = `mpremote terminal`;
+            let terminal = vscode.window.terminals.find(t => t.name === lastOpenTerminal || t.name === terminalName);
+
+            if (terminal) {
+                terminal.show();
+            } else {
+                terminal = vscode.window.createTerminal(terminalName);
+                terminal.sendText(`mpremote repl`);
+                terminal.show();
+            }
+        }),
+
+        vscode.commands.registerCommand('mpremote.installPackage', () => {
+            vscode.window.showInformationMessage('Install Package (Logik fehlt)');
+        }),
+
+        vscode.commands.registerCommand('mpremote.rtc', () => {
+            vscode.window.showInformationMessage('RTC (Logik fehlt)');
+        }),
+
         vscode.commands.registerCommand('mpremote.runFile', async (item?: MpremoteFsItem) => {
             let filePath: string | undefined;
 
             if (item && item.path && !item.isDirectory) {
                 filePath = item.path;
             } else {
-                // If command is triggered from command palette or elsewhere, try to get active editor
                 const editor = vscode.window.activeTextEditor;
                 if (editor && editor.document.uri.scheme === 'mpremote') {
                     filePath = decodeURIComponent(editor.document.uri.path);
                 } else {
-                    // Potentially prompt user to select a file from the device if no context is available
                     vscode.window.showWarningMessage('Keine Datei zum Ausführen ausgewählt oder aktiver Editor ist keine Gerätedatei.');
                     return;
                 }
@@ -41,41 +127,20 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                 return;
             }
 
-            // Ensure path starts with / for mpremote
-            const commandPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-            vscode.window.showWarningMessage('Logik zum Ausführen von Dateien fehlt. Muss noch eingebaut werden.',);
 
+            const commandPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+            const fileName = commandPath.split('/').pop() || 'Unbekannte Datei';
+            const terminalName = `mpremote run: ${fileName}`;
 
-            // try {
-            //     vscode.window.withProgress({
-            //         location: vscode.ProgressLocation.Notification,
-            //         title: `Führe Datei "${commandPath}" aus...`,
-            //         cancellable: false
-            //     }, async () => {
-            //         const { stdout, stderr } = await exec(`mpremote run "${commandPath}"`);
-
-            //         if (stderr) {
-            //             console.error(`mpremote run error for ${commandPath}: ${stderr}`);
-            //             vscode.window.showErrorMessage(`Fehler beim Ausführen der Datei ${commandPath}: ${stderr.split('\n')[0]}`);
-            //         }
-            //         if (stdout) {
-            //             // Show output in a dedicated output channel or notification
-            //             console.log(`mpremote run output for ${commandPath}:\n${stdout}`);
-            //             vscode.window.showInformationMessage(`Ausgabe von ${commandPath}: ${stdout.split('\n')[0]}... (siehe Log für Details)`);
-            //             // Consider creating an output channel: vscode.window.createOutputChannel("mpremote Run")
-            //         }
-            //         // No explicit success message needed if stdout/stderr handled
-            //     });
-            // } catch (error: any) {
-            //     console.error(`Failed to execute mpremote run for ${commandPath}: ${error}`);
-            //     let errorMessage = `Fehler beim Ausführen von mpremote run für ${commandPath}.`;
-            //     if (error.stderr) {
-            //         errorMessage += ` Details: ${error.stderr}`;
-            //     } else if (error.message) {
-            //         errorMessage += ` Details: ${error.message}`;
-            //     }
-            //     vscode.window.showErrorMessage(errorMessage);
-            // }
+            let terminal = vscode.window.terminals.find(t => t.name === terminalName);
+            if (terminal) {
+                terminal.show();
+            } else {
+                terminal = vscode.window.createTerminal(terminalName);
+                terminal.sendText(`mpremote run "${commandPath}"`);
+                terminal.show();
+                lastOpenTerminal = terminalName;
+            }
         }),
 
         vscode.commands.registerCommand('mpremote.deleteFileItem', async (item: MpremoteFsItem) => {
@@ -135,7 +200,6 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                 }
             }
 
-            // Proceed with deletion if confirmed
             if (doDelete) {
                 try {
                     vscode.window.withProgress({
@@ -153,6 +217,13 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                         }
                     });
                 } catch (error: any) {
+                    if (error.stderr.trim() === "mpremote: no device found") {
+                        const errorMessage = "Wahrscheinlich läuft ein anderer Prozess auf dem Gerät.";
+                        console.error(errorMessage);
+                        vscode.window.showErrorMessage(errorMessage);
+                        return;
+                    }
+
                     console.error(`Failed to execute mpremote rm for ${filePath}: ${error}`);
                     let errorMessage = `Fehler beim Ausführen von mpremote rm für ${filePath}.`;
                     if (error.stderr) {
@@ -165,7 +236,6 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
             }
         }),
 
-        // --- Folder Deletion Command ---
         vscode.commands.registerCommand('mpremote.deleteFolderItem', async (item: MpremoteFsItem) => {
             if (!item || !item.path || !item.isDirectory) {
                 vscode.window.showErrorMessage('Kein gültiges Verzeichniselement zum Löschen ausgewählt.');
@@ -231,7 +301,6 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                         title: `Lösche Verzeichnis "${folderName}"...`,
                         cancellable: false
                     }, async () => {
-                        // Use `rm -r` for recursive deletion
                         const commandPath = folderPath.startsWith('/') ? folderPath : `/${folderPath}`;
                         const { stderr } = await exec(`mpremote rm -r "${commandPath}"`);
 
@@ -243,6 +312,12 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                         }
                     });
                 } catch (error: any) {
+                    if (error.stderr.trim() === "mpremote: no device found") {
+                        const errorMessage = "Wahrscheinlich läuft ein anderer Prozess auf dem Gerät.";
+                        console.error(errorMessage);
+                        vscode.window.showErrorMessage(errorMessage);
+                        return;
+                    }
                     console.error(`Failed to execute mpremote rm -r for ${folderPath}: ${error}`);
                     let errorMessage = `Fehler beim Ausführen von mpremote rm -r für ${folderPath}.`;
                     if (error.stderr) {
@@ -255,29 +330,20 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
             }
         }),
 
-        // --- Reset Confirmation Settings Command ---
         vscode.commands.registerCommand('mpremote.resetDeleteConfirmations', async () => {
             await context.globalState.update(skipFileDeleteConfirmationKey, false);
             await context.globalState.update(skipFolderDeleteConfirmationKey, false);
             vscode.window.showInformationMessage('Die Einstellungen für Löschbestätigungen wurden zurückgesetzt.');
         }),
 
-        // --- Open Lib File Info Command ---
         vscode.commands.registerCommand('mpremote.openLibFile', () => {
-            // Provide a more informative message
             vscode.window.showInformationMessage('Dateien im /lib-Verzeichnis können nicht direkt über diese Erweiterung bearbeitet werden, um versehentliche Änderungen an Bibliotheken zu vermeiden. Sie können sie bei Bedarf manuell herunterladen und bearbeiten.');
         }),
 
-        // --- Filesystem Refresh/Sync Commands ---
-        // Using a single refresh command is usually sufficient
         vscode.commands.registerCommand('mpremote.refreshFileSystem', () => {
             fileSystemProvider.refresh();
         }),
-        // vscode.commands.registerCommand('mpremote.syncFileSystem', () => {
-        //   fileSystemProvider.refresh(); // Sync is effectively a refresh
-        // }),
 
-        // --- Storage Status Update Command (if needed, e.g., for a status bar item) ---
         vscode.commands.registerCommand('mpremote.updateStorageStatus', async () => {
             const status = await getStorageStatus();
             if (status) {

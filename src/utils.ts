@@ -72,10 +72,6 @@ export async function getStorageStatus(): Promise<string | null> {
         return `${usedSize} / ${totalSize}  available: ${availSize}  used: ${usagePercent}%`;
     } catch (error: any) {
         console.error(`Failed to execute mpremote df: ${error}`);
-        // Avoid showing error popup for common connection issues
-        // if (error.stderr && !error.stderr.includes('no device connected')) {
-        //   vscode.window.showWarningMessage(`Fehler beim Ausführen von mpremote df: ${error.stderr.split('\n')[0]}`);
-        // }
-        return "$(error) Device Storage: failed"; // Indicate failure without popup
+        return "$(error) Device Storage: failed";
     }
 }

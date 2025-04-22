@@ -126,6 +126,13 @@ export class MpremoteFileSystemProvider implements vscode.TreeDataProvider<Mprem
                 }
             }
         } catch (error: any) {
+            if (error.stderr.trim() === "mpremote: no device found") {
+                const errorMessage = "Wahrscheinlich läuft ein anderer Prozess auf dem Gerät.";
+                console.error(errorMessage);
+                vscode.window.showErrorMessage(errorMessage);
+                return [];
+            }
+
             console.error(`Failed to execute mpremote ls for path ${path}: ${error}`);
             let errorMessage = `Fehler beim Ausführen von mpremote ls für Pfad ${path}.`;
             if (error.stderr) {
