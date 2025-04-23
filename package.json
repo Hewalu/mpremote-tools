@@ -48,7 +48,7 @@
     "commands": [
       {
         "command": "mpremote.syncFileSystem",
-        "title": "Sync",
+        "title": "Sync Filesystem",
         "category": "MPRemote Tools",
         "icon": {
           "dark": "resources/icons/dark/swap-vert-icon.svg",
@@ -57,13 +57,14 @@
       },
       {
         "command": "mpremote.refreshFileSystem",
-        "title": "Refresh",
+        "title": "Refresh Filesystem",
         "category": "MPRemote Tools",
-        "icon": "$(refresh)"
+        "icon": "$(refresh)",
+        "enablement": "view == mpremoteFileSystemActivityBar || view == mpremoteFileSystemExplorer"
       },
       {
         "command": "mpremote.runFile",
-        "title": "run file",
+        "title": "Run File",
         "category": "MPRemote Tools",
         "icon": {
           "dark": "resources/icons/dark/run-microcontroller-icon.svg",
@@ -72,15 +73,17 @@
       },
       {
         "command": "mpremote.deleteFileItem",
-        "title": "delete file",
+        "title": "Delete File",
         "category": "MPRemote Tools",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "enablement": "viewItem == file"
       },
       {
         "command": "mpremote.deleteFolderItem",
-        "title": "delete folder",
+        "title": "Delete Folder",
         "category": "MPRemote Tools",
-        "icon": "$(trash)"
+        "icon": "$(trash)",
+        "enablement": "viewItem == folder"
       },
       {
         "command": "mpremote.resetDeleteConfirmations",

@@ -23,14 +23,14 @@ export class MpremoteCommandsProvider implements vscode.TreeDataProvider<Mpremot
 
     getChildren(): Thenable<MpremoteCommandItem[]> {
         return Promise.resolve([
-            new MpremoteCommandItem('Verbinden', vscode.TreeItemCollapsibleState.None, {
+            new MpremoteCommandItem('Connect', vscode.TreeItemCollapsibleState.None, {
                 command: 'mpremote.connect',
-                title: 'Verbinden'
+                title: 'Connect'
             }, new vscode.ThemeIcon('debug-start')),
 
-            new MpremoteCommandItem('Trennen', vscode.TreeItemCollapsibleState.None, {
+            new MpremoteCommandItem('Disconnect', vscode.TreeItemCollapsibleState.None, {
                 command: 'mpremote.disconnect',
-                title: 'Trennen'
+                title: 'Disconnect'
             }, new vscode.ThemeIcon('debug-disconnect')),
 
             new MpremoteCommandItem('Soft Reset', vscode.TreeItemCollapsibleState.None, {
@@ -53,9 +53,9 @@ export class MpremoteCommandsProvider implements vscode.TreeDataProvider<Mpremot
                 title: 'Install Package'
             }, new vscode.ThemeIcon('symbol-constructor')),
 
-            new MpremoteCommandItem('RTC', vscode.TreeItemCollapsibleState.None, {
+            new MpremoteCommandItem('Device time', vscode.TreeItemCollapsibleState.None, {
                 command: 'mpremote.rtc',
-                title: 'RTC'
+                title: 'Device time'
             }, new vscode.ThemeIcon('watch')),
         ]);
     }

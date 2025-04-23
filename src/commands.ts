@@ -96,15 +96,179 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                 terminal = vscode.window.createTerminal(terminalName);
                 terminal.sendText(`mpremote repl`);
                 terminal.show();
+                lastOpenTerminal = terminalName;
             }
         }),
 
-        vscode.commands.registerCommand('mpremote.installPackage', () => {
-            vscode.window.showInformationMessage('Install Package (Logik fehlt)');
+        vscode.commands.registerCommand('mpremote.installPackage', async () => {
+            const packageName = await vscode.window.showInputBox({
+                prompt: 'Paketname eingeben',
+                placeHolder: 'z.B. micropython-urequests',
+                ignoreFocusOut: true
+            });
+
+            if (!packageName || packageName.trim() === '') {
+                return;
+            }
+
+            const trimmedPackageName = packageName.trim();
+
+            try {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Installiere Paket "${trimmedPackageName}"...`,
+                    cancellable: false
+                }, async (progress) => {
+                    progress.report({ increment: 0, message: "Starte mpremote..." });
+
+                    const command = `mpremote mip install ${trimmedPackageName}`;
+                    const { stderr } = await exec(command);
+
+                    progress.report({ increment: 100, message: "Abgeschlossen." });
+
+                    if (stderr) {
+                        if (stderr.includes("no device found")) {
+                            const errorMessage = "Kein Gerät gefunden. Stellen Sie sicher, dass das Gerät verbunden und nicht von einem anderen Prozess verwendet wird.";
+                            console.error(errorMessage);
+                            vscode.window.showErrorMessage(errorMessage);
+                            return; // Stop further processing
+                        } else if (stderr.includes("Error:") || stderr.includes("error:")) {
+                            // Treat other stderr content containing "Error" as an error
+                            console.error(`mpremote mip install error for ${trimmedPackageName}: ${stderr}`);
+                            vscode.window.showErrorMessage(`Fehler bei der Installation von ${trimmedPackageName}: ${stderr.split('\n')[0]}`);
+                            return; // Stop further processing
+                        } else {
+                            // Log other stderr messages as potentially useful info/warnings
+                            console.log(`mpremote mip install output (stderr) for ${trimmedPackageName}: ${stderr}`);
+                            // Optionally show a less severe message for non-error stderr
+                            // vscode.window.showInformationMessage(`Installation von ${trimmedPackageName} abgeschlossen (mit Hinweisen): ${stderr.split('\n')[0]}`);
+                        }
+                    }
+
+                    vscode.window.showInformationMessage(`Paket "${trimmedPackageName}" erfolgreich installiert.`);
+
+                    // Refresh file system view as new files/folders might be present in /lib
+                    fileSystemProvider.refresh();
+                });
+            } catch (error: any) {
+                if (error.stderr && error.stderr.trim().includes("no device found")) {
+                    const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                    console.error(errorMessage);
+                    vscode.window.showErrorMessage(errorMessage);
+                    return;
+                }
+
+                console.error(`Failed to execute mpremote mip install for ${trimmedPackageName}:`, error);
+                let errorMessage = `Fehler beim Ausführen von mpremote mip install für ${trimmedPackageName}.`;
+                if (error.stderr) {
+                    errorMessage += ` Details: ${error.stderr}`;
+                } else if (error.message) {
+                    errorMessage += ` Details: ${error.message}`;
+                }
+                vscode.window.showErrorMessage(errorMessage);
+            }
         }),
 
-        vscode.commands.registerCommand('mpremote.rtc', () => {
-            vscode.window.showInformationMessage('RTC (Logik fehlt)');
+        vscode.commands.registerCommand('mpremote.rtc', async () => {
+            try {
+
+                const { stdout, stderr } = await exec('mpremote rtc');
+
+                if (stderr) {
+                    if (stderr.includes("no device found")) {
+                        const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                        console.error(errorMessage);
+                        vscode.window.showErrorMessage(errorMessage);
+                        return;
+                    }
+                    console.error(`mpremote rtc error: ${stderr}`);
+                    vscode.window.showErrorMessage(`Fehler beim Lesen der RTC: ${stderr.split('\n')[0]}`);
+                    return;
+                }
+
+                const match = stdout.trim().match(/\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d{1,2}),\s*(\d+)\)/);
+
+                if (!match) {
+                    console.error(`Could not parse RTC output: ${stdout}`);
+                    vscode.window.showErrorMessage('Konnte die RTC-Ausgabe nicht verarbeiten.');
+                    return;
+                }
+
+                const [, year, month, day, weekday, hour, minute, second] = match.map(Number);
+                // Pad single digit numbers with leading zero
+                const formattedTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+                const formattedDate = `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
+                // Weekday: MicroPython uses Monday=0 to Sunday=6.
+                const weekdaysGerman = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+                const weekdayName = weekdaysGerman[weekday] || weekday;
+
+                const formattedDateTime = `Gerätezeit: ${weekdayName}, ${formattedDate} ${formattedTime}`;
+
+                const syncOption: vscode.MessageItem = { title: 'Zeit synchronisieren' };
+                const noItem: vscode.MessageItem = { title: 'Abbrechen', isCloseAffordance: true };
+
+                const choice = await vscode.window.showInformationMessage(
+                    formattedDateTime,
+                    { modal: true },
+                    syncOption, noItem
+                );
+
+                if (choice === syncOption) {
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Synchronisiere Gerätszeit...",
+                        cancellable: false
+                    }, async (syncProgress) => {
+                        syncProgress.report({ increment: 50 });
+                        try {
+                            const { stderr: syncStderr } = await exec('mpremote rtc --set');
+                            if (syncStderr) {
+                                if (syncStderr.includes("no device found")) {
+                                    const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                                    console.error(errorMessage);
+                                    vscode.window.showErrorMessage(errorMessage);
+                                    return;
+                                }
+                                console.error(`mpremote rtc --set error: ${syncStderr}`);
+                                vscode.window.showErrorMessage(`Fehler beim Synchronisieren der RTC: ${syncStderr.split('\n')[0]}`);
+                            } else {
+                                syncProgress.report({ increment: 50, message: "Erfolgreich." });
+                                vscode.window.showInformationMessage('Gerätszeit erfolgreich mit Systemzeit synchronisiert.');
+                            }
+                        } catch (syncError: any) {
+                            if (syncError.stderr && syncError.stderr.trim().includes("no device found")) {
+                                const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                                console.error(errorMessage);
+                                vscode.window.showErrorMessage(errorMessage);
+                                return;
+                            }
+                            console.error(`Failed to execute mpremote rtc --set:`, syncError);
+                            let errorMessage = `Fehler beim Ausführen von mpremote rtc --set.`;
+                            if (syncError.stderr) {
+                                errorMessage += ` Details: ${syncError.stderr}`;
+                            } else if (syncError.message) {
+                                errorMessage += ` Details: ${syncError.message}`;
+                            }
+                            vscode.window.showErrorMessage(errorMessage);
+                        }
+                    });
+                }
+            } catch (error: any) {
+                if (error.stderr && error.stderr.trim().includes("no device found")) {
+                    const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                    console.error(errorMessage);
+                    vscode.window.showErrorMessage(errorMessage);
+                    return;
+                }
+                console.error(`Failed to execute mpremote rtc:`, error);
+                let errorMessage = `Fehler beim Ausführen von mpremote rtc.`;
+                if (error.stderr) {
+                    errorMessage += ` Details: ${error.stderr}`;
+                } else if (error.message) {
+                    errorMessage += ` Details: ${error.message}`;
+                }
+                vscode.window.showErrorMessage(errorMessage);
+            }
         }),
 
         vscode.commands.registerCommand('mpremote.runFile', async (item?: MpremoteFsItem) => {
@@ -114,8 +278,15 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                 filePath = item.path;
             } else {
                 const editor = vscode.window.activeTextEditor;
-                if (editor && editor.document.uri.scheme === 'mpremote') {
-                    filePath = decodeURIComponent(editor.document.uri.path);
+                if (editor) {
+                    const activeFilePath = editor.document.uri.path;
+                    if (activeFilePath.endsWith('.py') || activeFilePath.endsWith('.mpy')) {
+                        filePath = decodeURIComponent(editor.document.uri.path);
+
+                    } else {
+                        vscode.window.showWarningMessage('Aktive Datei ist keine Python-Datei. Bitte wählen Sie eine .py oder .mpy Datei aus.');
+                        return;
+                    }
                 } else {
                     vscode.window.showWarningMessage('Keine Datei zum Ausführen ausgewählt oder aktiver Editor ist keine Gerätedatei.');
                     return;
@@ -127,12 +298,11 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                 return;
             }
 
-
             const commandPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
             const fileName = commandPath.split('/').pop() || 'Unbekannte Datei';
             const terminalName = `mpremote run: ${fileName}`;
 
-            let terminal = vscode.window.terminals.find(t => t.name === terminalName);
+            let terminal = vscode.window.terminals.find(t => t.name === lastOpenTerminal || t.name === terminalName);
             if (terminal) {
                 terminal.show();
             } else {
@@ -355,6 +525,88 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
             }
             // Optionally refresh the FS view if storage is displayed there
             // fileSystemProvider.refresh();
+        }),
+
+        vscode.commands.registerCommand('mpremote.syncFileSystem', async () => {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showErrorMessage('Kein Arbeitsbereich geöffnet.');
+                return;
+            }
+
+            const workspaceRoot = workspaceFolders[0].uri;
+            const srcDirPath = vscode.Uri.joinPath(workspaceRoot, 'src');
+
+            try {
+                // Check if src directory exists
+                await vscode.workspace.fs.stat(srcDirPath);
+
+                // src directory exists, proceed with sync
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Synchronisiere 'src' Verzeichnis mit dem Gerät...",
+                    cancellable: false
+                }, async (progress) => {
+                    progress.report({ increment: 10, message: "Starte Synchronisierung..." });
+
+                    // Construct the PowerShell command
+                    // Note: Using the full path to srcDirPath.fsPath is safer
+                    const command = `Get-ChildItem -Path "${srcDirPath.fsPath}" | ForEach-Object { mpremote cp -r $_.FullName :/ }`;
+
+                    try {
+                        progress.report({ increment: 40, message: "Kopiere Dateien..." });
+                        const { stderr } = await exec(command, { shell: 'powershell.exe' }); // Specify PowerShell
+
+                        progress.report({ increment: 90, message: "Prüfe Ergebnis..." });
+
+                        if (stderr) {
+                            if (stderr.includes("no device found")) {
+                                const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                                console.error(errorMessage);
+                                vscode.window.showErrorMessage(errorMessage);
+                                return;
+                            } else if (stderr.includes("Error:") || stderr.includes("error:")) {
+                                console.error(`mpremote sync error: ${stderr}`);
+                                vscode.window.showErrorMessage(`Fehler beim Synchronisieren: ${stderr.split('\n')[0]}`);
+                                return;
+                            } else {
+                                // Log other stderr as info/warnings
+                                console.log(`mpremote sync output (stderr): ${stderr}`);
+                            }
+                        }
+
+                        progress.report({ increment: 100, message: "Abgeschlossen." });
+                        fileSystemProvider.refresh();
+
+                    } catch (syncError: any) {
+                        progress.report({ increment: 100, message: "Fehler." });
+                        if (syncError.stderr && syncError.stderr.trim().includes("no device found")) {
+                            const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                            console.error(errorMessage);
+                            vscode.window.showErrorMessage(errorMessage);
+                            return;
+                        }
+                        console.error(`Failed to execute sync command:`, syncError);
+                        let errorMessage = `Fehler beim Ausführen des Synchronisierungsbefehls.`;
+                        if (syncError.stderr) {
+                            errorMessage += ` Details: ${syncError.stderr}`;
+                        } else if (syncError.message) {
+                            errorMessage += ` Details: ${syncError.message}`;
+                        }
+                        vscode.window.showErrorMessage(errorMessage);
+                    }
+                });
+
+            } catch (error: any) {
+                // Handle error if fs.stat fails (directory doesn't exist)
+                if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+                    vscode.window.showInformationMessage(`Das Verzeichnis 'src' wurde im Arbeitsbereich nicht gefunden. (${srcDirPath.fsPath})`);
+                } else {
+                    // Handle other potential errors during fs.stat
+                    console.error("Error checking for src directory:", error);
+                    vscode.window.showErrorMessage(`Fehler beim Prüfen des 'src' Verzeichnisses: ${error.message}`);
+                }
+            }
         }),
     );
 }
