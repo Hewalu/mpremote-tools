@@ -1,71 +1,60 @@
-# mpremote-tools README
+# mpremote-tools
 
-This is the README for your extension "mpremote-tools". After writing up a brief description, we recommend including the following sections.
+Eine Visual Studio Code-Erweiterung zur einfachen Interaktion mit MicroPython-Geräten über das `mpremote`-Tool.
+
+Diese Erweiterung bietet eine bequeme Möglichkeit, gängige `mpremote`-Befehle direkt aus dem VS Code-Editor auszuführen, was die Entwicklung für MicroPython-Boards wie Raspberry Pi Pico, ESP32 und ESP8266 vereinfacht.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Geräteverbindung:** Einfaches Verbinden und Trennen von Ihrem MicroPython-Gerät.
+- **Dateiverwaltung:**
+  - Dateien und Verzeichnisse auf dem Gerät auflisten.
+  - Dateien vom Host-Computer auf das Gerät hochladen.
+  - Dateien vom Gerät auf den Host-Computer herunterladen.
+  - Dateien auf dem Gerät löschen.
+- **Code-Ausführung:** Führen Sie das aktuell geöffnete Skript auf dem Gerät aus.
+- **REPL-Integration:** Öffnen Sie eine REPL-Sitzung (Read-Eval-Print Loop) in einem integrierten VS Code-Terminal.
+- **Geräte-Befehle:** Führen Sie Befehle wie Soft-Reset (`reset`) oder das Abrufen von Geräteinformationen (`devs`) aus.
 
-For example if there is an image subfolder under your extension project workspace:
+## Anforderungen
 
-\!\[feature X\]\(images/feature-x.png\)
+Stellen Sie sicher, dass die folgenden Abhängigkeiten auf Ihrem System installiert sind:
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+1.  **Python 3.5+**: Muss installiert und zur `PATH`-Umgebungsvariable Ihres Systems hinzugefügt sein.
+2.  **mpremote**: Das `mpremote`-Tool muss installiert sein. Sie können es über `pip` installieren:
+    ```bash
+    pip install mpremote
+    ```
 
-## Requirements
+## Verwendung
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+1.  Schließen Sie Ihr MicroPython-Gerät an Ihren Computer an.
+2.  Öffnen Sie die Befehlspalette in VS Code (`Ctrl+Shift+P` oder `Cmd+Shift+P` auf macOS).
+3.  Geben Sie `mpremote` ein, um eine Liste der verfügbaren Befehle anzuzeigen.
+4.  Wählen Sie den gewünschten Befehl aus, z. B.:
+    - `mpremote: Connect to device`: Stellt eine Verbindung zum Gerät her (versucht, den Port automatisch zu erkennen).
+    - `mpremote: List files on device`: Listet die Dateien im Stammverzeichnis des Geräts auf.
+    - `mpremote: Upload active file to device`: Lädt die aktuell im Editor geöffnete Datei auf das Gerät hoch.
+    - `mpremote: Open REPL`: Startet eine interaktive REPL-Sitzung.
 
-## Extension Settings
+## Erweiterungseinstellungen
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+Diese Erweiterung fügt die folgenden Einstellungen zu Ihren VS Code-Einstellungen hinzu:
 
-For example:
+- `mpremote.port`: Geben Sie den seriellen Port für Ihr Gerät an (z. B. `COM3` unter Windows oder `/dev/ttyUSB0` unter Linux). Wenn leer, versucht `mpremote` den Port automatisch zu finden.
+- `mpremote.baudrate`: Die Baudrate für die serielle Kommunikation. Der Standardwert ist `115200`.
 
-This extension contributes the following settings:
+## Bekannte Probleme
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
+Derzeit sind keine bekannten Probleme vorhanden. Wenn Sie auf einen Fehler stoßen, erstellen Sie bitte ein Issue im [GitHub-Repository](https://github.com/your-repo/mpremote-tools).
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
-
 ### 1.0.0
 
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- Erste Veröffentlichung von `mpremote-tools`.
+- Grundlegende Funktionen für Geräteverbindung, Dateiverwaltung und REPL-Integration hinzugefügt.
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**Viel Spaß beim Entwickeln mit MicroPython in VS Code!**
