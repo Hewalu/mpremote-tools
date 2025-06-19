@@ -3,6 +3,10 @@
   "displayName": "mpremote tools",
   "description": "A User-Interface for mprempote.",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hewalu/mpremote-tools"
+  },
   "engines": {
     "vscode": "^1.99.0"
   },
