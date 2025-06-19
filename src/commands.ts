@@ -10,16 +10,80 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
     let lastOpenTerminal: string | undefined = undefined;
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('mpremote.connect', () => {
-            vscode.window.showInformationMessage('Verbindungsversuch gestartet... (Logik fehlt)');
-            // fileSystemProvider.refresh(); // Refresh FS view after attempting connection
-        }),
+        vscode.commands.registerCommand('mpremote.initProject', async () => {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                vscode.window.showErrorMessage('Bitte öffnen Sie einen Projektordner, um ihn zu initialisieren.');
+                return;
+            }
 
-        vscode.commands.registerCommand('mpremote.disconnect', () => {
-            vscode.window.showInformationMessage('Trennungsversuch gestartet... (Logik fehlt)');
-            // fileSystemProvider.refresh();
-        }),
+            const workspaceRoot = workspaceFolders[0].uri;
+            const sourceFilesUri = vscode.Uri.joinPath(context.extensionUri, 'init_files');
 
+            try {
+                const filesToCopy = await vscode.workspace.fs.readDirectory(sourceFilesUri);
+                let filesCreated = 0;
+
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: "Initialisiere Projekt...",
+                    cancellable: false
+                }, async (progress) => {
+                    progress.report({ increment: 0, message: "Starte mpremote..." });
+
+                    for (const [fileName, fileType] of filesToCopy) {
+                        if (fileType === vscode.FileType.File) {
+                            const sourceFileUri = vscode.Uri.joinPath(sourceFilesUri, fileName);
+                            const destFileUri = vscode.Uri.joinPath(workspaceRoot, fileName);
+
+                            try {
+                                await vscode.workspace.fs.stat(destFileUri);
+                                // Optional: Inform user that file already exists
+                                // vscode.window.showInformationMessage(`Datei "${fileName}" existiert bereits.`);
+                            } catch (error) {
+                                if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+                                    const content = await vscode.workspace.fs.readFile(sourceFileUri);
+                                    await vscode.workspace.fs.writeFile(destFileUri, content);
+                                    progress.report({ increment: (filesCreated / filesToCopy.length) * 100, message: `Datei "${fileName}" wurde erstellt.` });
+                                    filesCreated++;
+                                } else {
+                                    throw error; // Re-throw other errors
+                                }
+                            }
+                        }
+                    }
+
+                    if (filesCreated > 0) {
+                        progress.report({ increment: 100, message: '' });
+                        vscode.window.showInformationMessage('Projektinitialisierung abgeschlossen.');
+
+                        // Check if pyproject.toml was created
+                        const pyprojectTomlUri = vscode.Uri.joinPath(workspaceRoot, 'pyproject.toml');
+                        try {
+                            await vscode.workspace.fs.stat(pyprojectTomlUri);
+                            // File exists, open it
+                            const document = await vscode.workspace.openTextDocument(pyprojectTomlUri);
+                            await vscode.window.showTextDocument(document);
+                        } catch (error) {
+                            console.log('pyproject.toml not found after initialization');
+                        }
+                    } else {
+                        progress.report({ increment: 100, message: '' });
+                        vscode.window.showInformationMessage('Alle Initialisierungsdateien existieren bereits. Nichts zu tun.');
+                    }
+                });
+
+
+            } catch (error: any) {
+                console.error("Fehler bei der Projektinitialisierung:", error);
+                if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+                    vscode.window.showErrorMessage(`Fehler bei der Initialisierung: Das Verzeichnis 'resources/init-files' wurde nicht gefunden.`);
+                } else {
+                    vscode.window.showErrorMessage(`Fehler bei der Initialisierung des Projekts: ${error.message}`);
+                }
+            }
+        })
+        ,
         vscode.commands.registerCommand('mpremote.softReset', async () => {
             try {
                 await vscode.window.withProgress({
@@ -304,13 +368,12 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
 
             let terminal = vscode.window.terminals.find(t => t.name === lastOpenTerminal || t.name === terminalName);
             if (terminal) {
-                terminal.show();
-            } else {
-                terminal = vscode.window.createTerminal(terminalName);
-                terminal.sendText(`mpremote run "${commandPath}"`);
-                terminal.show();
-                lastOpenTerminal = terminalName;
+                terminal.dispose();
             }
+            terminal = vscode.window.createTerminal(terminalName);
+            terminal.sendText(`mpremote run "${commandPath}"`);
+            terminal.show();
+            lastOpenTerminal = terminalName;
         }),
 
         vscode.commands.registerCommand('mpremote.deleteFileItem', async (item: MpremoteFsItem) => {
@@ -517,14 +580,68 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
         vscode.commands.registerCommand('mpremote.updateStorageStatus', async () => {
             const status = await getStorageStatus();
             if (status) {
-                // Update a status bar item here if you implement one
                 console.log("Storage Status Updated:", status);
-                // vscode.window.setStatusBarMessage(`Device Storage: ${status}`, 5000); // Example: Show in status bar briefly
             } else {
                 console.log("Failed to update storage status.");
             }
-            // Optionally refresh the FS view if storage is displayed there
-            // fileSystemProvider.refresh();
+        }),
+
+        vscode.commands.registerCommand('mpremote.deleteFileSystem', async () => {
+            const yesItem: vscode.MessageItem = { title: 'Ja, alles löschen' };
+            const noItem: vscode.MessageItem = { title: 'Abbrechen', isCloseAffordance: true };
+
+            const choice = await vscode.window.showWarningMessage(
+                'Möchten Sie wirklich ALLE Dateien und Verzeichnisse auf dem Gerät löschen?',
+                {
+                    modal: true,
+                    detail: 'Diese Aktion kann nicht rückgängig gemacht werden.',
+                },
+                yesItem, noItem
+            );
+
+            if (choice === yesItem) {
+                try {
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Lösche gesamtes Dateisystem...",
+                        cancellable: false
+                    }, async (progress) => {
+                        progress.report({ increment: 10, message: "Lese Verzeichnisinhalt..." });
+
+                        progress.report({ increment: 40, message: "Lösche Dateien und Verzeichnisse..." });
+                        const { stderr: rmError } = await exec(`mpremote rm -rv :/`);
+
+                        if (rmError) {
+                            console.log(rmError);
+                            vscode.window.showErrorMessage(`Fehler beim Löschen des Dateisystems: ${rmError.split('\n')[0]}`);
+                        } else {
+                            progress.report({ increment: 90, message: "Abgeschlossen." });
+                            vscode.window.showInformationMessage('Dateisystem erfolgreich gelöscht.');
+                            fileSystemProvider.refresh();
+                        }
+                    });
+                } catch (error: any) {
+                    if (error.stderr && error.stderr.trim().includes("no device found")) {
+                        const errorMessage = "Kein Gerät gefunden oder es läuft bereits ein anderer Prozess auf dem Gerät.";
+                        vscode.window.showErrorMessage(errorMessage);
+                        return;
+                    }
+
+                    if (error.stderr && error.stderr.trim().includes("mpremote: rm -r: cannot remove :/ Operation not permitted")) {
+                        vscode.window.showInformationMessage('Dateisystem erfolgreich gelöscht.');
+                        fileSystemProvider.refresh();
+                        return;
+                    }
+
+                    let errorMessage = `Fehler beim Löschen des Dateisystems.`;
+                    if (error.stderr) {
+                        errorMessage += ` Details: ${error.stderr}`;
+                    } else if (error.message) {
+                        errorMessage += ` Details: ${error.message}`;
+                    }
+                    vscode.window.showErrorMessage(errorMessage);
+                }
+            }
         }),
 
         vscode.commands.registerCommand('mpremote.syncFileSystem', async () => {
@@ -535,27 +652,41 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
             }
 
             const workspaceRoot = workspaceFolders[0].uri;
-            const srcDirPath = vscode.Uri.joinPath(workspaceRoot, 'src');
+            const excludedFiles = [".syncignore"];
+
+            const syncIgnorePath = vscode.Uri.joinPath(workspaceRoot, '.syncignore');
+            try {
+                const syncIgnoreContent = await vscode.workspace.fs.readFile(syncIgnorePath);
+                const syncIgnoreText = Buffer.from(syncIgnoreContent).toString('utf8');
+
+                // Add each non-empty line from .syncignore to excludedFiles
+                syncIgnoreText.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line && !line.startsWith('#')) // Skip empty lines and comments
+                    .forEach(pattern => {
+                        excludedFiles.push(pattern);
+                    });
+
+            } catch (err) {
+                vscode.window.showWarningMessage('No .syncignore file found or error reading it.');
+            }
+
 
             try {
-                // Check if src directory exists
-                await vscode.workspace.fs.stat(srcDirPath);
-
-                // src directory exists, proceed with sync
                 await vscode.window.withProgress({
                     location: vscode.ProgressLocation.Notification,
-                    title: "Synchronisiere 'src' Verzeichnis mit dem Gerät...",
+                    title: "Synchronisiere alle Dateien mit dem Gerät",
                     cancellable: false
                 }, async (progress) => {
                     progress.report({ increment: 10, message: "Starte Synchronisierung..." });
 
-                    // Construct the PowerShell command
-                    // Note: Using the full path to srcDirPath.fsPath is safer
-                    const command = `Get-ChildItem -Path "${srcDirPath.fsPath}" | ForEach-Object { mpremote cp -r $_.FullName :/ }`;
+                    const excludeList = excludedFiles.map(f => `'${f}'`).join(', ');
+
+                    const command = `$excludeList = @(${excludeList}); Get-ChildItem -Path "${workspaceRoot.fsPath}" | Where-Object { $excludeList -notcontains $_.Name } | ForEach-Object { mpremote cp -r $_.FullName :/ }`.trim();
 
                     try {
                         progress.report({ increment: 40, message: "Kopiere Dateien..." });
-                        const { stderr } = await exec(command, { shell: 'powershell.exe' }); // Specify PowerShell
+                        const { stderr } = await exec(command, { shell: 'powershell.exe' });
 
                         progress.report({ increment: 90, message: "Prüfe Ergebnis..." });
 
@@ -570,13 +701,14 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                                 vscode.window.showErrorMessage(`Fehler beim Synchronisieren: ${stderr.split('\n')[0]}`);
                                 return;
                             } else {
-                                // Log other stderr as info/warnings
                                 console.log(`mpremote sync output (stderr): ${stderr}`);
                             }
                         }
 
-                        progress.report({ increment: 100, message: "Abgeschlossen." });
                         fileSystemProvider.refresh();
+                        progress.report({ increment: 100, message: "Abgeschlossen." });
+                        vscode.window.showInformationMessage("Dateien erfolgreich synchronisiert.");
+
 
                     } catch (syncError: any) {
                         progress.report({ increment: 100, message: "Fehler." });
@@ -598,15 +730,10 @@ export function registerCommands(context: vscode.ExtensionContext, fileSystemPro
                 });
 
             } catch (error: any) {
-                // Handle error if fs.stat fails (directory doesn't exist)
-                if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
-                    vscode.window.showInformationMessage(`Das Verzeichnis 'src' wurde im Arbeitsbereich nicht gefunden. (${srcDirPath.fsPath})`);
-                } else {
-                    // Handle other potential errors during fs.stat
-                    console.error("Error checking for src directory:", error);
-                    vscode.window.showErrorMessage(`Fehler beim Prüfen des 'src' Verzeichnisses: ${error.message}`);
-                }
+                console.error("Error during file synchronization:", error);
+                vscode.window.showErrorMessage(`Fehler bei der Dateisynchronisierung: ${error.message}`);
             }
         }),
+
     );
 }

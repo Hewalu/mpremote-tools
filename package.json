@@ -11,6 +11,9 @@
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
+  "files": [
+    "init_files"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -25,7 +28,7 @@
       "mpremote-tools": [
         {
           "id": "mpremoteCommands",
-          "name": "Device Commands",
+          "name": "MPRemote Commands",
           "icon": "resources/icons/penis-icon.svg"
         },
         {
@@ -54,6 +57,12 @@
           "dark": "resources/icons/dark/swap-vert-icon.svg",
           "light": "resources/icons/light/swap-vert-icon.svg"
         }
+      },
+      {
+        "command": "mpremote.deleteFileSystem",
+        "title": "Delete Filesystem",
+        "category": "MPRemote Tools",
+        "icon": "$(trash)"
       },
       {
         "command": "mpremote.refreshFileSystem",
@@ -94,24 +103,34 @@
     "menus": {
       "view/title": [
         {
-          "command": "mpremote.syncFileSystem",
+          "command": "mpremote.deleteFileSystem",
           "when": "view == mpremoteFileSystemActivityBar",
           "group": "navigation@1"
         },
         {
-          "command": "mpremote.syncFileSystem",
+          "command": "mpremote.deleteFileSystem",
           "when": "view == mpremoteFileSystemExplorer",
           "group": "navigation@1"
         },
         {
-          "command": "mpremote.refreshFileSystem",
+          "command": "mpremote.syncFileSystem",
           "when": "view == mpremoteFileSystemActivityBar",
           "group": "navigation@2"
         },
         {
-          "command": "mpremote.refreshFileSystem",
+          "command": "mpremote.syncFileSystem",
           "when": "view == mpremoteFileSystemExplorer",
           "group": "navigation@2"
+        },
+        {
+          "command": "mpremote.refreshFileSystem",
+          "when": "view == mpremoteFileSystemActivityBar",
+          "group": "navigation@3"
+        },
+        {
+          "command": "mpremote.refreshFileSystem",
+          "when": "view == mpremoteFileSystemExplorer",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
